@@ -434,3 +434,17 @@ class EmailTranslationResponse(BaseModel):
     preheader_prefix: str = Field(..., description="Translated preheader prefix")
     opening: str = Field(..., description="Translated opening text")
     closing: str = Field(..., description="Translated closing text")
+
+
+class Api1TranslationRequest(BaseModel):
+    """Request model for single-text translation (api1)"""
+
+    text: str = Field(..., description="Text to translate")
+    output_language: str = Field(..., description="Target language")
+    market: str = Field(..., description="Market identifier (ignored)")
+
+
+class Api1TranslationResponse(BaseModel):
+    """Response model for single-text translation (api1)"""
+
+    translated_text: str = Field(..., description="Final translated text")
