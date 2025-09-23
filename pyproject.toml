@@ -1,0 +1,22 @@
+[project]
+name = "translation-service"
+version = "0.1.0"
+description = "Professional AI Translation Microservice with Multi-Agent Architecture"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.108.1",
+    "pandas>=2.3.2",
+    "plotly>=6.3.0",
+    "psycopg2-binary>=2.9.10",
+    "sqlalchemy>=2.0.43",
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",
+    "pydantic-settings>=2.10.1",
+    "streamlit>=1.49.1",
+]
