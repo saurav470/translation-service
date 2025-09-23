@@ -1,7 +1,7 @@
 """
 Translation endpoints
 """
-
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from typing import List
 from api.models import (
@@ -71,16 +71,17 @@ async def translate_text(
         raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
 
-@router.post("/translate/email", response_model=EmailTranslationResponse)
+@router.post("/translate/api2", response_model=EmailTranslationResponse)
 async def translate_email(
     request: EmailTranslationRequest,
     service: TranslationService = Depends(get_translation_service),
 ):
     """
-    Translate individual email fields and return only those translated fields.
+    Translate email fields using the full 7-agent pipeline in parallel and
+    return only the final texts. Ignores `market` from the request.
     """
     try:
-        # Map string language to existing enum if possible; otherwise, raise.
+        # Validate and map target language
         lang_str = request.output_language.strip().lower()
         if lang_str not in settings.SUPPORTED_LANGUAGES:
             raise HTTPException(
@@ -92,30 +93,42 @@ async def translate_email(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid language code")
 
-        # Helper to translate a single string using minimal pipeline
-        async def translate_text_only(text: str) -> str:
+
+        async def translate_full(text: str) -> str:
             result = await service.translate(
                 TranslationRequest(
                     source_text=text,
                     target_language=target_lang,
-                    include_quality_analysis=False,
-                    include_cultural_analysis=False,
-                    include_mqm_analysis=False,
-                    include_iso_compliance=False,
+                    include_quality_analysis=True,
+                    include_cultural_analysis=True,
+                    include_mqm_analysis=True,
+                    include_iso_compliance=True,
                 )
             )
-            return (
-                result.refined_translation.final_translation
-                if result.refined_translation
-                else result.initial_translation.translation
-            )
+            if result.final_translation:
+                return result.final_translation.final_translation
+            if result.refined_translation:
+                return result.refined_translation.final_translation
+            return result.initial_translation.translation
 
-        subject = await translate_text_only(request.subject)
-        subject_prefix = await translate_text_only(request.subject_prefix)
-        preheader = await translate_text_only(request.preheader)
-        preheader_prefix = await translate_text_only(request.preheader_prefix)
-        opening = await translate_text_only(request.opening)
-        closing = await translate_text_only(request.closing)
+
+        tasks = [
+            translate_full(request.subject),
+            translate_full(request.subject_prefix),
+            translate_full(request.preheader),
+            translate_full(request.preheader_prefix),
+            translate_full(request.opening),
+            translate_full(request.closing),
+        ]
+
+        (
+            subject,
+            subject_prefix,
+            preheader,
+            preheader_prefix,
+            opening,
+            closing,
+        ) = await asyncio.gather(*tasks)
 
         return EmailTranslationResponse(
             subject=subject,
