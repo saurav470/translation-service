@@ -239,6 +239,7 @@ async def api1(
     """
     try:
         lang_str = request.output_language.strip().lower()
+        print(f"api1 request for {lang_str}")
         if lang_str not in settings.SUPPORTED_LANGUAGES:
             raise HTTPException(
                 status_code=400,
@@ -261,10 +262,14 @@ async def api1(
         )
 
         if result.final_translation:
-            print(f"api1 {request.text} -> {result.final_translation.final_translation}")
+            print(
+                f"api1 {request.text} -> {result.final_translation.final_translation}"
+            )
             final_text = result.final_translation.final_translation
         elif result.refined_translation:
-            print(f"api1 {request.text} -> {result.refined_translation.final_translation}")
+            print(
+                f"api1 {request.text} -> {result.refined_translation.final_translation}"
+            )
             final_text = result.refined_translation.final_translation
         else:
             print(f"api1 {request.text} -> {result.initial_translation.translation}")

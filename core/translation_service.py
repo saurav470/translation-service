@@ -1,3 +1,7 @@
+"""
+Core translation service with multi-agent architecture
+"""
+
 import asyncio
 import time
 import uuid
@@ -8,7 +12,6 @@ from agents.translator_agent import TranslatorAgent
 from agents.reviewer_agent import ReviewerAgent
 from agents.quality_assessor import QualityAssessor
 from agents.cultural_advisor import CulturalAdvisor
-from agents.final_translator_agent import FinalTranslatorAgent
 from quality.mqm_framework import MQMFramework
 from quality.iso_standards import ISOStandards
 from api.models import (
@@ -21,7 +24,6 @@ from api.models import (
     QualityAssessment,
     MQMAnalysis,
     ISOCompliance,
-    FinalTranslationResult,
     ErrorResponse,
 )
 
@@ -37,7 +39,6 @@ class TranslationService:
         self.cultural_advisor = CulturalAdvisor()
         self.mqm_framework = MQMFramework()
         self.iso_standards = ISOStandards()
-        self.final_translator = FinalTranslatorAgent()
 
     async def translate(self, request: TranslationRequest) -> TranslationResponse:
         """Process a single translation request through the multi-agent pipeline"""
@@ -201,44 +202,6 @@ class TranslationService:
 
                 results["iso_compliance"] = iso_result
 
-            # Step 7: Final Translator Agent - Ultimate Translation
-            final_translation = None
-            if (
-                request.include_quality_analysis
-                and quality_assessment
-                and mqm_analysis
-                and iso_compliance
-            ):
-                # Use the refined translation as the base for final translation
-                base_translation = (
-                    refined_translation.final_translation
-                    if refined_translation
-                    else initial_result["translation"]
-                )
-
-                final_result = await self._run_agent_async(
-                    self.final_translator.create_final_translation,
-                    request.source_text,
-                    base_translation,
-                    quality_result,
-                    mqm_result,
-                    iso_result,
-                    request.target_language.value,
-                )
-
-                final_translation = FinalTranslationResult(
-                    final_translation=final_result["final_translation"],
-                    quality_improvements=final_result.get("quality_improvements", []),
-                    errors_fixed=final_result.get("errors_fixed", []),
-                    iso_enhancements=final_result.get("iso_enhancements", []),
-                    confidence_level=final_result.get("confidence_level", "fair"),
-                    translation_grade=final_result.get("translation_grade", "C"),
-                    professional_ready=final_result.get("professional_ready", False),
-                    final_notes=final_result.get("final_notes", []),
-                )
-
-                results["final_translation"] = final_result
-
             processing_time = time.time() - start_time
 
             return TranslationResponse(
@@ -251,7 +214,6 @@ class TranslationService:
                 quality_assessment=quality_assessment,
                 mqm_analysis=mqm_analysis,
                 iso_compliance=iso_compliance,
-                final_translation=final_translation,
                 processing_time=processing_time,
                 timestamp=datetime.now().isoformat(),
             )
@@ -263,20 +225,22 @@ class TranslationService:
     async def translate_batch(
         self, requests: list[TranslationRequest]
     ) -> BatchTranslationResponse:
-
+        """Process multiple translation requests"""
         start_time = time.time()
         batch_id = str(uuid.uuid4())
 
-
+        # Process translations in parallel
         tasks = [self.translate(req) for req in requests]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        # Separate successful and failed results
         successful_results = []
         error_count = 0
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 error_count += 1
+                # Create error response for failed translation
                 error_response = TranslationResponse(
                     request_id=str(uuid.uuid4()),
                     source_text=requests[i].source_text,
@@ -307,15 +271,18 @@ class TranslationService:
         )
 
     async def _run_agent_async(self, agent_func, *args, **kwargs):
+        """Run agent function asynchronously"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, agent_func, *args, **kwargs)
 
     def get_supported_languages(self) -> Dict[str, Any]:
+        """Get list of supported languages and their configurations"""
         from config.agent_config import LANGUAGE_CONFIGS
 
         return LANGUAGE_CONFIGS
 
     def get_health_status(self) -> Dict[str, Any]:
+        """Get service health status"""
         return {
             "status": "healthy",
             "agents_initialized": all(
@@ -326,7 +293,6 @@ class TranslationService:
                     self.cultural_advisor is not None,
                     self.mqm_framework is not None,
                     self.iso_standards is not None,
-                    self.final_translator is not None,
                 ]
             ),
             "supported_languages": list(self.get_supported_languages().keys()),

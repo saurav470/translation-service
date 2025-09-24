@@ -25,13 +25,14 @@ async def lifespan(app: FastAPI):
     # Shutdown
     translation_service = None
 
-# Create FastAPI app
+# Create FastAPI app 
+# Todo: fix local docs_url
 app = FastAPI(
     title=" Translation Service",
     description="Professional AI Translation Microservice with Multi-Agent Architecture",
+    root_path="/translation-service",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # docs_url="/translation-service/docs",
     lifespan=lifespan
 )
 
