@@ -99,7 +99,7 @@ async def translate_email(
                 TranslationRequest(
                     source_text=text,
                     target_language=target_lang,
-                    quality_mode=QualityMode.FAST,  # Use fast mode for API2 to reduce latency
+                    # quality_mode=QualityMode.FAST,  # Use fast mode for API2 to reduce latency
                 )
             )
             if result.final_translation:
