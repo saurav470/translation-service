@@ -58,7 +58,7 @@ class TranslationRequest(BaseModel):
     """Translation request model"""
 
     source_text: str = Field(
-        ..., min_length=1, max_length=10000, description="Source text to translate"
+        ..., max_length=10000, description="Source text to translate"
     )
     target_language: LanguageCode = Field(
         default=LanguageCode.SWEDISH, description="Target language"
@@ -83,11 +83,8 @@ class TranslationRequest(BaseModel):
     )
 
     @validator("source_text")
-    def validate_source_text(cls, v):
-        if not v.strip():
-            raise ValueError("Source text cannot be empty")
-        return v.strip()
-
+    def normalize_source_text(cls, v):
+        return v if v is None else v
 
 class BatchTranslationRequest(BaseModel):
     """Batch translation request model"""

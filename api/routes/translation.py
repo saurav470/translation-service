@@ -140,6 +140,7 @@ async def translate_email(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"api2 error: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Email translation failed: {str(e)}"
         )
@@ -275,6 +276,7 @@ async def api1(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"api1 error: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"API1 translation failed: {str(e)}"
         )
