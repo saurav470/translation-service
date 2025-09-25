@@ -2,12 +2,14 @@ import json
 import os
 from openai import OpenAI
 from config.agent_config import LANGUAGE_CONFIGS
+from utils.GLOSSARY.dutch import dutch
 
 
 class TranslatorAgent:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = "gpt-5"
+        self.glossary = dutch
 
     def translate(self, source_text, target_language="swedish"):
         """Perform high-quality English to target language translation"""
@@ -108,6 +110,14 @@ class TranslatorAgent:
             if content is None:
                 raise ValueError("No content received from OpenAI API")
             result = json.loads(content)
+            if target_language == "dutch":
+                original_translation = result["translation"]
+                result["translation"] = self._apply_glossary(original_translation)
+            
+                # TODO: uncomment it Track if glossary was applied 
+                # if original_translation != result["translation"]:
+                #     result["translation_notes"].append("Glossary terms applied")
+                    
             return result
 
         except Exception as e:
@@ -118,3 +128,9 @@ class TranslatorAgent:
                 "difficulty_level": "error",
                 "key_decisions": [],
             }
+
+    def _apply_glossary(self, text):
+        # Same logic as DeepL system
+        for en_term, nl_term in sorted(self.glossary.items(), key=lambda x: -len(x[0])):
+            text = text.replace(en_term, nl_term)
+        return text

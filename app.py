@@ -33,79 +33,110 @@ def initialize_agents():
         st.session_state.final_translator = FinalTranslatorAgent()
         st.session_state.agents_initialized = True
 
-def run_translation_pipeline(source_text, target_language="swedish"):
-    """Run the complete multi-agent translation pipeline"""
+def run_translation_pipeline(source_text, target_language="swedish", quality_mode="balanced"):
+    """Run the optimized multi-agent translation pipeline"""
     results = {}
+    start_time = time.time()
     
-    with st.spinner("Running multi-agent translation pipeline..."):
+    with st.spinner(f"Running {quality_mode} mode translation pipeline..."):
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        # Step 1: Initial Translation
+        # Step 1: Initial Translation (always required)
         status_text.text("🤖 Agent 1: Performing initial translation...")
-        progress_bar.progress(0.2)
+        progress_bar.progress(0.25)
         translation_result = st.session_state.translator.translate(source_text, target_language)
         results['initial_translation'] = translation_result
         
-        # Step 2: Cultural Advisory
-        status_text.text("🏛️ Agent 2: Analyzing cultural context...")
-        progress_bar.progress(0.4)
-        cultural_analysis = st.session_state.cultural_advisor.analyze(
-            source_text, translation_result['translation'], target_language
-        )
-        results['cultural_analysis'] = cultural_analysis
-        
-        # Step 3: Review and Refinement
-        status_text.text("📝 Agent 3: Reviewing and refining translation...")
-        progress_bar.progress(0.6)
-        refined_translation = st.session_state.reviewer.review(
-            source_text, 
-            translation_result['translation'],
-            cultural_analysis,
-            target_language
-        )
-        results['refined_translation'] = refined_translation
-        
-        # Step 4: Quality Assessment
-        status_text.text("📊 Agent 4: Performing quality assessment...")
-        progress_bar.progress(0.8)
-        quality_assessment = st.session_state.quality_assessor.assess(
-            source_text,
-            refined_translation['final_translation'],
-            target_language
-        )
-        results['quality_assessment'] = quality_assessment
-        
-        # Step 5: MQM Framework Analysis
-        status_text.text("🎯 Generating MQM quality metrics...")
-        progress_bar.progress(0.9)
-        mqm_analysis = st.session_state.mqm_framework.analyze(
-            source_text,
-            refined_translation['final_translation'],
-            quality_assessment
-        )
-        results['mqm_analysis'] = mqm_analysis
-        
-        # Step 6: ISO Compliance Check
-        status_text.text("✅ Validating ISO 17100:2015 compliance...")
-        progress_bar.progress(1.0)
-        iso_compliance = st.session_state.iso_standards.validate(results)
-        results['iso_compliance'] = iso_compliance
-        
-        # step 7: agent 7 final tarnslation after quality check
-        status_text.text("🔄 Finalizing translation after quality checks...")
-        final_translation = st.session_state.final_translator.create_final_translation(
-            source_text,
-            refined_translation['final_translation'],
-            quality_assessment,
-            mqm_analysis,
-            iso_compliance,
-            target_language
-        )
-        print(final_translation)
-        results['updated_translation'] = final_translation
-        status_text.text("✨ Translation pipeline completed!")
-        
+        if quality_mode == "fast":
+            # Fast mode: Only translator + reviewer
+            status_text.text("📝 Agent 2: Reviewing and refining translation...")
+            progress_bar.progress(0.75)
+            refined_translation = st.session_state.reviewer.review(
+                source_text, 
+                translation_result['translation'],
+                {},  # No cultural analysis in fast mode
+                target_language
+            )
+            results['refined_translation'] = refined_translation
+            progress_bar.progress(1.0)
+            status_text.text("✨ Fast translation completed!")
+            
+        elif quality_mode == "balanced":
+            # Balanced mode: Cultural + Review + Basic Quality
+            status_text.text("🏛️ Agent 2: Analyzing cultural context...")
+            progress_bar.progress(0.5)
+            cultural_analysis = st.session_state.cultural_advisor.analyze(
+                source_text, translation_result['translation'], target_language
+            )
+            results['cultural_analysis'] = cultural_analysis
+            
+            status_text.text("📝 Agent 3: Reviewing and refining translation...")
+            progress_bar.progress(0.75)
+            refined_translation = st.session_state.reviewer.review(
+                source_text, 
+                translation_result['translation'],
+                cultural_analysis,
+                target_language
+            )
+            results['refined_translation'] = refined_translation
+            
+            status_text.text("📊 Agent 4: Performing quality assessment...")
+            progress_bar.progress(1.0)
+            quality_assessment = st.session_state.quality_assessor.assess(
+                source_text,
+                refined_translation['final_translation'],
+                target_language
+            )
+            results['quality_assessment'] = quality_assessment
+            status_text.text("✨ Balanced translation completed!")
+            
+        else:  # quality mode
+            # Full pipeline with all checks
+            status_text.text("🏛️ Agent 2: Analyzing cultural context...")
+            progress_bar.progress(0.3)
+            cultural_analysis = st.session_state.cultural_advisor.analyze(
+                source_text, translation_result['translation'], target_language
+            )
+            results['cultural_analysis'] = cultural_analysis
+            
+            status_text.text("📝 Agent 3: Reviewing and refining translation...")
+            progress_bar.progress(0.5)
+            refined_translation = st.session_state.reviewer.review(
+                source_text, 
+                translation_result['translation'],
+                cultural_analysis,
+                target_language
+            )
+            results['refined_translation'] = refined_translation
+            
+            status_text.text("📊 Agent 4: Performing quality assessment...")
+            progress_bar.progress(0.7)
+            quality_assessment = st.session_state.quality_assessor.assess(
+                source_text,
+                refined_translation['final_translation'],
+                target_language
+            )
+            results['quality_assessment'] = quality_assessment
+            
+            status_text.text("🎯 Agent 5: Generating MQM quality metrics...")
+            progress_bar.progress(0.85)
+            mqm_analysis = st.session_state.mqm_framework.analyze(
+                source_text,
+                refined_translation['final_translation'],
+                quality_assessment
+            )
+            results['mqm_analysis'] = mqm_analysis
+            
+            status_text.text("✅ Agent 6: Validating ISO 17100:2015 compliance...")
+            progress_bar.progress(1.0)
+            iso_compliance = st.session_state.iso_standards.validate(results)
+            results['iso_compliance'] = iso_compliance
+            
+            status_text.text("✨ Quality translation completed!")
+    
+    processing_time = time.time() - start_time
+    results['processing_time'] = processing_time
     return results
 
 def display_quality_metrics(results):
@@ -124,18 +155,32 @@ def display_quality_metrics(results):
         )
     
     with col2:
-        iso_status = "✅ Compliant" if results['iso_compliance']['compliant'] else "❌ Non-Compliant"
-        st.metric(
-            label="ISO 17100:2015 Status",
-            value=iso_status
-        )
+        if 'iso_compliance' in results:
+            iso_status = "✅ Compliant" if results['iso_compliance']['compliant'] else "❌ Non-Compliant"
+            st.metric(
+                label="ISO 17100:2015 Status",
+                value=iso_status
+            )
+        else:
+            st.metric(
+                label="ISO 17100:2015 Status",
+                value="Not Available",
+                help="Available in Quality mode"
+            )
     
     with col3:
-        mqm_score = results['mqm_analysis']['total_score']
-        st.metric(
-            label="MQM Framework Score",
-            value=f"{mqm_score:.1f}/100"
-        )
+        if 'mqm_analysis' in results:
+            mqm_score = results['mqm_analysis']['total_score']
+            st.metric(
+                label="MQM Framework Score",
+                value=f"{mqm_score:.1f}/100"
+            )
+        else:
+            st.metric(
+                label="MQM Framework Score",
+                value="Not Available",
+                help="Available in Quality mode"
+            )
     
     # Detailed Quality Metrics
     st.subheader("🎯 Detailed Quality Breakdown")
@@ -212,6 +257,26 @@ def main():
         selected_language = language_options[selected_display]
         selected_config = LANGUAGE_CONFIGS[selected_language]
         
+        # Quality Mode Selection
+        quality_mode = st.selectbox(
+            "Select quality mode:",
+            options=[
+                ("🚀 Fast Mode", "fast"),
+                ("⚖️ Balanced Mode", "balanced"), 
+                ("🏆 Quality Mode", "quality")
+            ],
+            format_func=lambda x: x[0],
+            index=1  # Default to balanced
+        )[1]
+        
+        # Show estimated time
+        time_estimates = {
+            "fast": "~1-2 minutes (Translator + Reviewer only)",
+            "balanced": "~2-3 minutes (Basic quality checks)",
+            "quality": "~3-4 minutes (Full pipeline with all checks)"
+        }
+        st.info(f"⏱️ Estimated time: {time_estimates[quality_mode]}")
+        
         source_text = st.text_area(
             "Enter English text to translate:",
             height=200,
@@ -228,25 +293,29 @@ def main():
     
     if st.button("🚀 Start Professional Translation", type="primary"):
         if source_text.strip():
-            results = run_translation_pipeline(source_text, selected_language)
+            results = run_translation_pipeline(source_text, selected_language, quality_mode)
             
             # Display Results
             st.header("📋 Translation Results")
             
+            # Show processing time
+            if 'processing_time' in results:
+                st.success(f"⏱️ Translation completed in {results['processing_time']:.1f} seconds using {quality_mode} mode!")
+            
             # Final Translation
             selected_config = LANGUAGE_CONFIGS[selected_language]
             st.subheader(f"🎯 Final {selected_config['name']} Translation")
-            final_translation = results['refined_translation']['final_translation']
+            if 'refined_translation' in results:
+                final_translation = results['refined_translation']['final_translation']
+            else:
+                final_translation = results['initial_translation']['translation']
             st.markdown(f"**{final_translation}**")
             
-            # after quality check final translation
-            st.subheader(f"🏆 Finalized {selected_config['name']} Translation After Quality")
-            st.markdown(f"""final_translation after quality checks considering MQM and ISO compliance""")
-            updated_translation = results['updated_translation']['final_translation']
-            st.markdown(f"**{updated_translation}**")
-            
-            # Quality Metrics
-            display_quality_metrics(results)
+            # Quality Metrics (only if available)
+            if 'quality_assessment' in results:
+                display_quality_metrics(results)
+            else:
+                st.info(f"💡 For detailed quality metrics, try using Balanced or Quality mode.")
             
             # Detailed Analysis Sections
             with st.expander("🔍 Translation Process Analysis"):
@@ -254,18 +323,21 @@ def main():
                 st.write(results['initial_translation']['translation'])
                 st.write("**Confidence:**", f"{results['initial_translation']['confidence']:.1f}%")
                 
-                st.subheader("Cultural Analysis")
-                cultural = results['cultural_analysis']
-                st.write("**Cultural Adaptations:**", cultural['adaptations'])
-                st.write("**Regional Considerations:**", cultural['regional_notes'])
+                if 'cultural_analysis' in results:
+                    st.subheader("Cultural Analysis")
+                    cultural = results['cultural_analysis']
+                    st.write("**Cultural Adaptations:**", cultural['adaptations'])
+                    st.write("**Regional Considerations:**", cultural['regional_notes'])
                 
-                st.subheader("Review Comments")
-                review = results['refined_translation']
-                for comment in review['review_comments']:
-                    st.write(f"• {comment}")
+                if 'refined_translation' in results:
+                    st.subheader("Review Comments")
+                    review = results['refined_translation']
+                    for comment in review['review_comments']:
+                        st.write(f"• {comment}")
             
-            with st.expander("📊 Quality Assessment Details"):
-                qa = results['quality_assessment']
+            if 'quality_assessment' in results:
+                with st.expander("📊 Quality Assessment Details"):
+                    qa = results['quality_assessment']
                 
                 col1, col2 = st.columns(2)
                 with col1:

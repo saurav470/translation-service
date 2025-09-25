@@ -94,14 +94,12 @@ async def translate_email(
             raise HTTPException(status_code=400, detail="Invalid language code")
 
         async def translate_full(text: str) -> str:
+            from api.models import QualityMode
             result = await service.translate(
                 TranslationRequest(
                     source_text=text,
                     target_language=target_lang,
-                    include_quality_analysis=True,
-                    include_cultural_analysis=True,
-                    include_mqm_analysis=True,
-                    include_iso_compliance=True,
+                    quality_mode=QualityMode.FAST,  # Use fast mode for API2 to reduce latency
                 )
             )
             if result.final_translation:
@@ -235,7 +233,7 @@ async def api1(
 ):
     """
     Single-text translation API that returns only the final translated text.
-    Uses full 7-agent pipeline. Ignores `market`.
+    Uses fast mode (translator + reviewer only) for optimal speed. Ignores `market`.
     """
     try:
         lang_str = request.output_language.strip().lower()
@@ -250,14 +248,12 @@ async def api1(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid language code")
 
+        from api.models import QualityMode
         result = await service.translate(
             TranslationRequest(
                 source_text=request.text,
                 target_language=target_lang,
-                include_quality_analysis=True,
-                include_cultural_analysis=True,
-                include_mqm_analysis=True,
-                include_iso_compliance=True,
+                # quality_mode=QualityMode.BALANCED,  # Use fast mode for API1 to reduce latency
             )
         )
 

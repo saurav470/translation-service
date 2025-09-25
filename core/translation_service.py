@@ -41,18 +41,38 @@ class TranslationService:
         self.iso_standards = ISOStandards()
 
     async def translate(self, request: TranslationRequest) -> TranslationResponse:
-        """Process a single translation request through the multi-agent pipeline"""
+        """Process a single translation request through the optimized multi-agent pipeline"""
         start_time = time.time()
         request_id = str(uuid.uuid4())
 
         try:
-            # Step 1: Initial Translation
+            # Override request flags based on quality mode
+            from api.models import QualityMode
+            quality_mode = request.quality_mode
+            
+            if quality_mode == QualityMode.FAST:
+                # Fast mode: only translator + reviewer
+                request.include_review = True
+                request.include_cultural_analysis = False
+                request.include_quality_assessment = False
+                request.include_mqm_analysis = False
+                request.include_iso_compliance = False
+            elif quality_mode == QualityMode.BALANCED:
+                # Balanced mode: basic quality checks with cultural context
+                request.include_review = True
+                request.include_cultural_analysis = True
+                request.include_quality_assessment = True
+                request.include_mqm_analysis = False
+                request.include_iso_compliance = False
+            # QualityMode.QUALITY keeps all flags as provided
+            
+            # PHASE 1: Initial Translation (always required)
             initial_result = await self._run_agent_async(
                 self.translator.translate,
                 request.source_text,
                 request.target_language.value,
             )
-
+            
             # Convert to response model
             initial_translation = TranslationResult(
                 translation=initial_result["translation"],
@@ -69,7 +89,7 @@ class TranslationService:
                 "target_language": request.target_language.value,
             }
 
-            # Step 2: Cultural Analysis (if requested)
+            # PHASE 2: Cultural Analysis (if requested)
             cultural_analysis = None
             if request.include_cultural_analysis:
                 cultural_result = await self._run_agent_async(
@@ -80,28 +100,19 @@ class TranslationService:
                 )
 
                 cultural_analysis = CulturalAnalysis(
-                    cultural_appropriateness=cultural_result[
-                        "cultural_appropriateness"
-                    ],
+                    cultural_appropriateness=cultural_result["cultural_appropriateness"],
                     adaptations=cultural_result.get("adaptations", []),
                     regional_notes=cultural_result.get("regional_notes", []),
-                    register_recommendations=cultural_result.get(
-                        "register_recommendations", "neutral"
-                    ),
-                    localization_suggestions=cultural_result.get(
-                        "localization_suggestions", []
-                    ),
+                    register_recommendations=cultural_result.get("register_recommendations", "neutral"),
+                    localization_suggestions=cultural_result.get("localization_suggestions", []),
                     cultural_risks=cultural_result.get("cultural_risks", []),
-                    target_audience_fit=cultural_result.get(
-                        "target_audience_fit", "fair"
-                    ),
+                    target_audience_fit=cultural_result.get("target_audience_fit", "fair"),
                 )
-
                 results["cultural_analysis"] = cultural_result
 
-            # Step 3: Review and Refinement
+            # PHASE 3: Review and Refinement (depends on cultural analysis)
             refined_translation = None
-            if request.include_quality_analysis:
+            if request.include_review:
                 review_result = await self._run_agent_async(
                     self.reviewer.review,
                     request.source_text,
@@ -114,22 +125,21 @@ class TranslationService:
                     final_translation=review_result["final_translation"],
                     review_comments=review_result.get("review_comments", []),
                     changes_made=review_result.get("changes_made", []),
-                    confidence_improvement=review_result.get(
-                        "confidence_improvement", 0
-                    ),
+                    confidence_improvement=review_result.get("confidence_improvement", 0),
                     quality_grade=review_result.get("quality_grade", "C"),
                 )
-
                 results["refined_translation"] = review_result
 
-            # Step 4: Quality Assessment
+            # Get final text for quality checks
+            final_text = (
+                refined_translation.final_translation
+                if refined_translation
+                else initial_result["translation"]
+            )
+            
+            # PHASE 4: Quality Assessment (required for MQM)
             quality_assessment = None
-            if request.include_quality_analysis:
-                final_text = (
-                    refined_translation.final_translation
-                    if refined_translation
-                    else initial_result["translation"]
-                )
+            if request.include_quality_assessment:
                 quality_result = await self._run_agent_async(
                     self.quality_assessor.assess,
                     request.source_text,
@@ -142,65 +152,67 @@ class TranslationService:
                     detailed_scores=quality_result["detailed_scores"],
                     assessment_notes=quality_result.get("assessment_notes", []),
                     strengths=quality_result.get("strengths", []),
-                    areas_for_improvement=quality_result.get(
-                        "areas_for_improvement", []
-                    ),
-                    industry_benchmark_met=quality_result.get(
-                        "industry_benchmark_met", False
-                    ),
+                    areas_for_improvement=quality_result.get("areas_for_improvement", []),
+                    industry_benchmark_met=quality_result.get("industry_benchmark_met", False),
                     error_count=quality_result.get("error_count", 0),
-                    errors_per_1000_words=quality_result.get(
-                        "errors_per_1000_words", 0
-                    ),
+                    errors_per_1000_words=quality_result.get("errors_per_1000_words", 0),
                 )
-
                 results["quality_assessment"] = quality_result
 
-            # Step 5: MQM Analysis
+            # PARALLEL PHASE 5: MQM and ISO (can run in parallel after Quality Assessment)
+            advanced_tasks = []
             mqm_analysis = None
-            if request.include_mqm_analysis and quality_assessment:
-                mqm_result = await self._run_agent_async(
-                    self.mqm_framework.analyze,
-                    request.source_text,
-                    (
-                        refined_translation.final_translation
-                        if refined_translation
-                        else initial_result["translation"]
-                    ),
-                    results.get("quality_assessment", {}),
-                )
-
-                mqm_analysis = MQMAnalysis(
-                    total_score=mqm_result["total_score"],
-                    word_count=mqm_result["word_count"],
-                    errors=mqm_result.get("errors", []),
-                    error_summary=mqm_result["error_summary"],
-                    mqm_grade=mqm_result["mqm_grade"],
-                    industry_compliance=mqm_result["industry_compliance"],
-                )
-
-                results["mqm_analysis"] = mqm_result
-
-            # Step 6: ISO Compliance Check
             iso_compliance = None
+            
+            # Add MQM analysis task if requested (needs quality assessment)
+            if request.include_mqm_analysis and quality_assessment:
+                advanced_tasks.append(
+                    ("mqm", self._run_agent_async(
+                        self.mqm_framework.analyze,
+                        request.source_text,
+                        final_text,
+                        results.get("quality_assessment", {}),
+                    ))
+                )
+            
+            # Add ISO compliance task if requested
             if request.include_iso_compliance:
-                iso_result = await self._run_agent_async(
-                    self.iso_standards.validate, results
+                advanced_tasks.append(
+                    ("iso", self._run_agent_async(
+                        self.iso_standards.validate, results
+                    ))
                 )
-
-                iso_compliance = ISOCompliance(
-                    compliant=iso_result["compliant"],
-                    score=iso_result["score"],
-                    compliance_areas=iso_result["compliance_areas"],
-                    detailed_scores=iso_result["detailed_scores"],
-                    recommendations=iso_result.get("recommendations", []),
-                    iso_standard=iso_result.get("iso_standard", "ISO 17100:2015"),
-                    assessment_date=iso_result.get(
-                        "assessment_date", datetime.now().isoformat()
-                    ),
-                )
-
-                results["iso_compliance"] = iso_result
+            
+            # Execute advanced quality tasks in parallel if any exist
+            if advanced_tasks:
+                advanced_results = await asyncio.gather(*[task[1] for task in advanced_tasks])
+                
+                # Process results
+                for i, (task_type, _) in enumerate(advanced_tasks):
+                    if task_type == "mqm":
+                        mqm_result = advanced_results[i]
+                        mqm_analysis = MQMAnalysis(
+                            total_score=mqm_result["total_score"],
+                            word_count=mqm_result["word_count"],
+                            errors=mqm_result.get("errors", []),
+                            error_summary=mqm_result["error_summary"],
+                            mqm_grade=mqm_result["mqm_grade"],
+                            industry_compliance=mqm_result["industry_compliance"],
+                        )
+                        results["mqm_analysis"] = mqm_result
+                    
+                    elif task_type == "iso":
+                        iso_result = advanced_results[i]
+                        iso_compliance = ISOCompliance(
+                            compliant=iso_result["compliant"],
+                            score=iso_result["score"],
+                            compliance_areas=iso_result["compliance_areas"],
+                            detailed_scores=iso_result["detailed_scores"],
+                            recommendations=iso_result.get("recommendations", []),
+                            iso_standard=iso_result.get("iso_standard", "ISO 17100:2015"),
+                            assessment_date=iso_result.get("assessment_date", datetime.now().isoformat()),
+                        )
+                        results["iso_compliance"] = iso_result
 
             processing_time = time.time() - start_time
 

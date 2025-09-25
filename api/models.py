@@ -45,6 +45,14 @@ class TargetAudienceFit(str, Enum):
     POOR = "poor"
 
 
+class QualityMode(str, Enum):
+    """Translation quality modes"""
+    
+    FAST = "fast"          # Only Translator + Reviewer (~1-2 min)
+    BALANCED = "balanced"   # Basic quality checks (~2-3 min)
+    QUALITY = "quality"     # Full pipeline (~3-4 min)
+
+
 # Request Models
 class TranslationRequest(BaseModel):
     """Translation request model"""
@@ -55,11 +63,17 @@ class TranslationRequest(BaseModel):
     target_language: LanguageCode = Field(
         default=LanguageCode.SWEDISH, description="Target language"
     )
-    include_quality_analysis: bool = Field(
-        default=True, description="Include quality analysis"
+    quality_mode: QualityMode = Field(
+        default=QualityMode.BALANCED, description="Translation quality mode"
+    )
+    include_review: bool = Field(
+        default=True, description="Include review and refinement"
     )
     include_cultural_analysis: bool = Field(
         default=True, description="Include cultural analysis"
+    )
+    include_quality_assessment: bool = Field(
+        default=True, description="Include quality assessment"
     )
     include_mqm_analysis: bool = Field(
         default=True, description="Include MQM framework analysis"
